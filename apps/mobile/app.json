@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "Enterprise Chat",
+    "slug": "enterprise-chat-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "enterprisechat",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.company.enterprisechat"
+    },
+    "android": {
+      "package": "com.company.enterprisechat"
+    },
+    "plugins": [
+      "expo-router"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
