@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.next/
+out/
+.turbo/
+.expo/
+*.log
+.env
+.env.local
+.env.*.local
+coverage/
+build/
+*.tsbuildinfo
+.DS_Store
+Thumbs.db

@@ -1,0 +1,38 @@
+{
+  "name": "@enterprise-chat/mobile",
+  "version": "1.0.0",
+  "private": true,
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start --offline",
+    "start:lan": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web"
+  },
+  "dependencies": {
+    "@enterprise-chat/shared-types": "workspace:*",
+    "@expo/metro-runtime": "~58.0.15",
+    "expo": "~58.0.19",
+    "expo-constants": "~58.0.13",
+    "expo-linking": "~58.0.14",
+    "expo-router": "~58.0.26",
+    "expo-status-bar": "~58.0.4",
+    "lucide-react-native": "^0.469.0",
+    "nativewind": "^4.1.23",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-native": "0.88.0",
+    "react-native-css-interop": "^0.2.7",
+    "react-native-safe-area-context": "~5.10.1",
+    "react-native-screens": "~4.30.0",
+    "react-native-svg": "15.16.0",
+    "tailwindcss": "^3.4.17",
+    "zustand": "^5.0.16"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.2",
+    "@types/react": "~19.3.0",
+    "typescript": "^5.7.2"
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "name": "enterprise-chat-app-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Internal Enterprise Chat Application Monorepo",
+  "scripts": {
+    "dev:server": "pnpm --filter @enterprise-chat/server dev",
+    "dev:web": "pnpm --filter @enterprise-chat/web dev",
+    "dev:mobile": "pnpm --filter @enterprise-chat/mobile start",
+    "mobile:lan": "pnpm --filter @enterprise-chat/mobile start:lan",
+    "mobile:android": "pnpm --filter @enterprise-chat/mobile android",
+    "mobile:ios": "pnpm --filter @enterprise-chat/mobile ios",
+    "build": "pnpm --filter \"@enterprise-chat/*\" build",
+    "lint": "pnpm --filter \"@enterprise-chat/*\" lint",
+    "test": "pnpm --filter \"@enterprise-chat/*\" test",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:migrate": "pnpm --filter @enterprise-chat/server db:migrate",
+    "db:seed": "pnpm --filter @enterprise-chat/server db:seed",
+    "db:studio": "pnpm --filter @enterprise-chat/server db:studio"
+  },
+  "devDependencies": {
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.2"
+  }
+}
