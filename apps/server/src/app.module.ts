@@ -6,6 +6,8 @@ import { UsersModule } from './modules/users/users.module';
 import { ChannelsModule } from './modules/channels/channels.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { FilesModule } from './modules/files/files.module';
+import { AiModule } from './modules/ai/ai.module';
+import { RedisModule } from './modules/redis/redis.module';
 
 @Module({
   imports: [
@@ -13,12 +15,14 @@ import { FilesModule } from './modules/files/files.module';
       isGlobal: true,
       envFilePath: ['.env', '.env.example'],
     }),
+    RedisModule,
     PrismaModule,
     AuthModule,
     UsersModule,
     ChannelsModule,
     ChatModule,
     FilesModule,
+    AiModule,
   ],
 })
 export class AppModule {}

@@ -4,17 +4,23 @@ import React, { useState } from 'react';
 import { useChatStore } from '@/stores/useChatStore';
 import { X, Users, Check } from 'lucide-react';
 import { ConversationType, ChannelScope } from '@enterprise-chat/shared-types';
-
-const MOCK_COLLEAGUES = [
-  { id: 'u-techlead', name: 'Trần Trọng Kỹ Thuật', role: 'Tech Lead', dept: 'Kỹ Thuật' },
-  { id: 'u-dev', name: 'Lê Hoàng Lập Trình', role: 'Senior Dev', dept: 'Kỹ Thuật' },
-  { id: 'u-hr', name: 'Phạm Thị Nhân Sự', role: 'HR Manager', dept: 'Nhân Sự' },
-  { id: 'u-designer', name: 'Đỗ Thị Thiết Kế', role: 'UI/UX Lead', dept: 'Thiết Kế' },
-];
+import { useModalDismiss } from '@/hooks/useModalDismiss';
 
 export default function CreateGroupModal() {
-  const { isCreateGroupOpen, toggleCreateGroup, conversations, setConversations, setActiveConversationId, createChannelApi } =
-    useChatStore();
+  const {
+    isCreateGroupOpen,
+    toggleCreateGroup,
+    conversations,
+    setConversations,
+    setActiveConversationId,
+    createChannelApi,
+    colleagues,
+  } = useChatStore();
+
+  const { handleBackdropClick } = useModalDismiss({
+    isOpen: isCreateGroupOpen,
+    onClose: () => toggleCreateGroup(false),
+  });
 
   const [groupName, setGroupName] = useState('');
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
@@ -68,8 +74,14 @@ export default function CreateGroupModal() {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 select-none">
-      <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
+    <div
+      onClick={handleBackdropClick}
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 select-none"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200"
+      >
         {/* Header */}
         <div className="p-4 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -105,7 +117,7 @@ export default function CreateGroupModal() {
               Thêm thành viên ({selectedUserIds.length})
             </label>
             <div className="space-y-1.5 max-h-56 overflow-y-auto">
-              {MOCK_COLLEAGUES.map((c) => {
+              {colleagues.map((c) => {
                 const isSelected = selectedUserIds.includes(c.id);
                 return (
                   <button
@@ -119,8 +131,8 @@ export default function CreateGroupModal() {
                     }`}
                   >
                     <div>
-                      <p className="font-semibold">{c.name}</p>
-                      <span className="text-[10px] text-slate-500">{c.role} • {c.dept}</span>
+                      <p className="font-semibold">{c.fullName}</p>
+                      <span className="text-[10px] text-slate-500">{c.departmentName || c.email}</span>
                     </div>
                     <div
                       className={`w-5 h-5 rounded-md flex items-center justify-center border transition-all ${

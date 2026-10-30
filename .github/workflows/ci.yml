@@ -1,0 +1,51 @@
+name: Enterprise Chat CI
+
+on:
+  push:
+    branches: [ main, master, 'feature/**', dev, develop ]
+  pull_request:
+    branches: [ main, master, 'feature/**', dev, develop ]
+
+jobs:
+  typecheck-and-build:
+    name: Typecheck & Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Shared Types
+        run: pnpm --filter @enterprise-chat/shared-types build
+
+      - name: Generate Prisma Client
+        run: pnpm --filter @enterprise-chat/server run db:generate
+
+      - name: Typecheck Backend Server
+        run: pnpm --filter @enterprise-chat/server exec tsc --noEmit
+
+      - name: Typecheck Web Client
+        run: pnpm --filter @enterprise-chat/web exec tsc --noEmit
+
+      - name: Build Server
+        run: pnpm --filter @enterprise-chat/server build
+
+      - name: Build Web Client
+        run: pnpm --filter @enterprise-chat/web build
+        env:
+          NEXT_PUBLIC_API_URL: /api
+          NEXT_PUBLIC_WS_URL: /chat

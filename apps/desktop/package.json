@@ -1,12 +1,48 @@
 {
   "name": "@enterprise-chat/desktop",
   "version": "1.0.0",
+  "description": "Enterprise Chat Desktop Client",
+  "author": "Enterprise Tech Team",
   "main": "src/main.js",
   "private": true,
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist:win": "electron-builder --win"
+  },
+  "build": {
+    "appId": "com.enterprise.chat",
+    "productName": "Enterprise Chat",
+    "copyright": "Copyright © 2026 Enterprise Corp",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*"
+    ],
+    "win": {
+      "icon": "src/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Enterprise Chat"
+    }
   },
   "devDependencies": {
-    "electron": "^33.2.1"
+    "electron": "^33.2.1",
+    "electron-builder": "^26.18.0"
   }
 }

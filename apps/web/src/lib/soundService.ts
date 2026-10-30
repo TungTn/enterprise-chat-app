@@ -22,6 +22,24 @@ function getAudioContext(): AudioContext | null {
   return audioCtx;
 }
 
+// Automatically unlock Web Audio on first user interaction anywhere in the window
+if (typeof window !== 'undefined') {
+  const unlockAudio = () => {
+    try {
+      const ctx = getAudioContext();
+      if (ctx && ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
+    } catch {}
+    window.removeEventListener('pointerdown', unlockAudio);
+    window.removeEventListener('keydown', unlockAudio);
+    window.removeEventListener('click', unlockAudio);
+  };
+  window.addEventListener('pointerdown', unlockAudio, { passive: true });
+  window.addEventListener('keydown', unlockAudio, { passive: true });
+  window.addEventListener('click', unlockAudio, { passive: true });
+}
+
 /**
  * Play a subtle "pop / swoosh" sound when sending a message
  */
@@ -66,7 +84,7 @@ export function playMessageReceivedSound(): void {
     const gain1 = ctx.createGain();
     osc1.type = 'sine';
     osc1.frequency.setValueAtTime(523.25, now);
-    gain1.gain.setValueAtTime(0.12, now);
+    gain1.gain.setValueAtTime(0.22, now);
     gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
     osc1.connect(gain1);
     gain1.connect(ctx.destination);
@@ -78,7 +96,7 @@ export function playMessageReceivedSound(): void {
     const gain2 = ctx.createGain();
     osc2.type = 'sine';
     osc2.frequency.setValueAtTime(659.25, now + 0.09);
-    gain2.gain.setValueAtTime(0.14, now + 0.09);
+    gain2.gain.setValueAtTime(0.25, now + 0.09);
     gain2.gain.exponentialRampToValueAtTime(0.0001, now + 0.32);
     osc2.connect(gain2);
     gain2.connect(ctx.destination);

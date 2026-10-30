@@ -64,6 +64,7 @@ export interface UserProfile {
   statusMessage?: string | null;
   departmentId?: string | null;
   departmentName?: string | null;
+  phoneNumber?: string | null;
   createdAt: string;
 }
 
@@ -147,6 +148,9 @@ export interface ChatMessage {
   voice?: ChatVoiceData;
   poll?: ChatPoll;
   reactions?: Record<string, string[]>; // emoji -> array of userIds
+  clientMessageId?: string;
+  sequenceNumber?: number;
+  deliveryStatus?: MessageDeliveryStatus;
   createdAt: string;
   updatedAt?: string;
 }
@@ -197,6 +201,7 @@ export interface ChatAiSummary {
     participantCount: number;
     timeRange: string;
   };
+  modelUsed?: 'gemini-2.5-flash' | 'enterprise-nlp';
   generatedAt: string;
 }
 
@@ -219,12 +224,14 @@ export interface ChatNotificationSettings {
   taskbarAlert: boolean;
 }
 
+export type SupportedLanguage = 'vi' | 'en' | 'ja' | 'ko' | 'zh';
+
 export interface ChatSettings {
   notifications: ChatNotificationSettings;
   appearance: ChatAppearanceSettings;
   account: {
     interfaceScale: string;
-    language: 'vi' | 'en';
+    language: SupportedLanguage;
     startAutomatically: boolean;
   };
 }
@@ -282,9 +289,12 @@ export const SOCKET_EVENTS = {
   USER_TYPING: 'typing:user',
   MARK_READ: 'message:read',
   READ_RECEIPT: 'message:read_receipt',
+  MESSAGE_ACK: 'message:ack',
+  DELIVERY_STATUS_UPDATED: 'message:delivery_status',
 
   // Presence
-  PRESENCE_CHANGE: 'presence:change'
+  PRESENCE_CHANGE: 'presence:change',
+  SET_PRESENCE: 'presence:set'
 } as const;
 
 // DTOs
@@ -307,5 +317,18 @@ export interface AuthTokens {
   accessToken: string;
   refreshToken?: string;
   user: UserProfile;
+}
+
+export interface MessageAckDto {
+  messageId: string;
+  conversationId: string;
+  clientMessageId?: string;
+  status: MessageDeliveryStatus;
+}
+
+export interface IceServerConfig {
+  urls: string | string[];
+  username?: string;
+  credential?: string;
 }
 

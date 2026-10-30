@@ -8,11 +8,18 @@ export class UsersService {
 
   async findAll(search?: string, departmentId?: string) {
     const where: any = {};
-    if (search) {
-      where.OR = [
-        { fullName: { contains: search, mode: 'insensitive' } },
-        { email: { contains: search, mode: 'insensitive' } },
+    if (search && search.trim()) {
+      const trimmed = search.trim();
+      const cleanDigits = trimmed.replace(/\D/g, '');
+      const orConditions: any[] = [
+        { fullName: { contains: trimmed, mode: 'insensitive' } },
+        { email: { contains: trimmed, mode: 'insensitive' } },
+        { phoneNumber: { contains: trimmed, mode: 'insensitive' } },
       ];
+      if (cleanDigits && cleanDigits.length >= 3) {
+        orConditions.push({ phoneNumber: { contains: cleanDigits, mode: 'insensitive' } });
+      }
+      where.OR = orConditions;
     }
     if (departmentId) {
       where.departmentId = departmentId;
@@ -28,6 +35,7 @@ export class UsersService {
         role: true,
         status: true,
         statusMessage: true,
+        phoneNumber: true,
         departmentId: true,
         department: { select: { id: true, name: true } },
         createdAt: true,
@@ -58,13 +66,23 @@ export class UsersService {
       role: user.role,
       status: user.status,
       statusMessage: user.statusMessage,
+      phoneNumber: user.phoneNumber,
       departmentId: user.departmentId,
       departmentName: user.department?.name || null,
       createdAt: user.createdAt.toISOString(),
     };
   }
 
-  async updateProfile(userId: string, data: { status?: PresenceStatus; statusMessage?: string; avatarUrl?: string }) {
+  async updateProfile(
+    userId: string,
+    data: {
+      status?: PresenceStatus;
+      statusMessage?: string;
+      avatarUrl?: string;
+      phoneNumber?: string | null;
+      fullName?: string;
+    },
+  ) {
     const updated = await this.prisma.user.update({
       where: { id: userId },
       data,
@@ -79,6 +97,7 @@ export class UsersService {
       role: updated.role,
       status: updated.status,
       statusMessage: updated.statusMessage,
+      phoneNumber: updated.phoneNumber,
       departmentId: updated.departmentId,
       departmentName: updated.department?.name || null,
       createdAt: updated.createdAt.toISOString(),

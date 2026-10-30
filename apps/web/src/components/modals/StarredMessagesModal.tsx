@@ -3,10 +3,17 @@
 import React from 'react';
 import { useChatStore } from '@/stores/useChatStore';
 import { X, Star, Trash2 } from 'lucide-react';
+import { useModalDismiss } from '@/hooks/useModalDismiss';
+import { formatMessageTime } from '@/lib/formatDate';
 
 export default function StarredMessagesModal() {
   const { isStarredOpen, toggleStarred, messagesMap, activeConversationId, toggleStarMessage } =
     useChatStore();
+
+  const { handleBackdropClick } = useModalDismiss({
+    isOpen: isStarredOpen,
+    onClose: () => toggleStarred(false),
+  });
 
   if (!isStarredOpen) return null;
 
@@ -14,8 +21,14 @@ export default function StarredMessagesModal() {
   const starred = currentMessages.filter((m) => m.isStarred);
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 select-none">
-      <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
+    <div
+      onClick={handleBackdropClick}
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 select-none"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200"
+      >
         <div className="p-4 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center">
@@ -44,7 +57,7 @@ export default function StarredMessagesModal() {
               >
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-white">{m.senderName}</span>
-                  <span className="text-[10px] text-slate-500">{m.createdAt}</span>
+                  <span className="text-[10px] text-slate-500">{formatMessageTime(m.createdAt)}</span>
                 </div>
                 <p className="text-slate-300 leading-relaxed">{m.content}</p>
                 <div className="pt-1 flex justify-end">
