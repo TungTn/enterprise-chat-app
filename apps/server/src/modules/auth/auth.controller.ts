@@ -3,6 +3,7 @@ import {
   Post,
   Body,
   Get,
+  Delete,
   UseGuards,
   Req,
   HttpCode,
@@ -20,6 +21,16 @@ import { CurrentUser } from './decorators/current-user.decorator';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  private getClientIp(req: Request): string {
+    const forwarded = req.headers['x-forwarded-for'];
+    if (forwarded) {
+      const raw = Array.isArray(forwarded) ? forwarded[0] : forwarded.split(',')[0];
+      if (raw) return raw.trim().replace(/^.*:/, '');
+    }
+    const ip = req.ip || req.socket?.remoteAddress || '';
+    return ip.trim().replace(/^.*:/, '');
+  }
+
   @Post('register')
   async register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
@@ -29,7 +40,7 @@ export class AuthController {
   @Post('login')
   async login(@Body() dto: LoginDto, @Req() req: Request) {
     const userAgent = req.headers['user-agent'];
-    const ipAddress = req.ip || req.socket.remoteAddress;
+    const ipAddress = this.getClientIp(req);
     return this.authService.login(dto, userAgent, ipAddress);
   }
 
@@ -37,7 +48,7 @@ export class AuthController {
   @Post('bpm-sso')
   async bpmSso(@Body() dto: BpmSsoDto, @Req() req: Request) {
     const userAgent = req.headers['user-agent'];
-    const ipAddress = req.ip || req.socket.remoteAddress;
+    const ipAddress = this.getClientIp(req);
     return this.authService.bpmSsoLogin(dto, userAgent, ipAddress);
   }
 
@@ -50,23 +61,30 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   @Post('logout')
-  async logout(@CurrentUser() user: { id: string }) {
-    return this.authService.logout(user.id);
+  async logout(@CurrentUser() user: { id: string }, @Req() req: Request) {
+    const ipAddress = this.getClientIp(req);
+    return this.authService.logout(user.id, ipAddress);
   }
 
   @Get('sync-session')
   async getSyncSession(@Req() req: Request) {
-    const rawIp = req.headers['x-forwarded-for'] || req.ip || req.socket.remoteAddress || '';
-    const ipAddress = Array.isArray(rawIp) ? rawIp[0] : (typeof rawIp === 'string' ? rawIp.split(',')[0].trim() : '');
+    const ipAddress = this.getClientIp(req);
     return this.authService.getSyncedSession(ipAddress);
   }
 
   @HttpCode(HttpStatus.OK)
   @Post('sync-session')
   async setSyncSession(@Body() dto: BpmSsoDto, @Req() req: Request) {
-    const rawIp = req.headers['x-forwarded-for'] || req.ip || req.socket.remoteAddress || '';
-    const ipAddress = Array.isArray(rawIp) ? rawIp[0] : (typeof rawIp === 'string' ? rawIp.split(',')[0].trim() : '');
+    const ipAddress = this.getClientIp(req);
     return this.authService.setSyncedSession(ipAddress, dto);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Delete('sync-session')
+  async clearSyncSession(@Req() req: Request) {
+    const ipAddress = this.getClientIp(req);
+    this.authService.clearSyncedSession(ipAddress);
+    return { success: true };
   }
 
   @UseGuards(JwtAuthGuard)

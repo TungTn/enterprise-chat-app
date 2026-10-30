@@ -1,4 +1,4 @@
-﻿import { StateCreator } from 'zustand';
+import { StateCreator } from 'zustand';
 import {
   UserProfile,
   PresenceStatus,
@@ -34,6 +34,7 @@ export const createAuthSlice: StateCreator<ChatState, [], [], AuthSlice> = (set,
       if (res && res.accessToken) {
         if (typeof window !== 'undefined') {
           localStorage.setItem('enterprise_chat_token', res.accessToken);
+          localStorage.removeItem('enterprise_chat_logged_out');
         }
         disconnectSocket();
         set({
@@ -97,6 +98,7 @@ export const createAuthSlice: StateCreator<ChatState, [], [], AuthSlice> = (set,
       if (res && res.accessToken) {
         if (typeof window !== 'undefined') {
           localStorage.setItem('enterprise_chat_token', res.accessToken);
+          localStorage.removeItem('enterprise_chat_logged_out');
         }
         disconnectSocket();
         set({
@@ -147,6 +149,7 @@ export const createAuthSlice: StateCreator<ChatState, [], [], AuthSlice> = (set,
       if (res && res.accessToken) {
         if (typeof window !== 'undefined') {
           localStorage.setItem('enterprise_chat_token', res.accessToken);
+          localStorage.removeItem('enterprise_chat_logged_out');
         }
         disconnectSocket();
         set({
@@ -179,11 +182,13 @@ export const createAuthSlice: StateCreator<ChatState, [], [], AuthSlice> = (set,
       if (token && token !== 'mock-token-admin') {
         await apiRequest('/auth/logout', { method: 'POST' }, token);
       }
+      await apiRequest('/auth/sync-session', { method: 'DELETE' }).catch(() => {});
     } catch (e) {
       // Swallowed
     } finally {
       if (typeof window !== 'undefined') {
         localStorage.removeItem('enterprise_chat_token');
+        localStorage.setItem('enterprise_chat_logged_out', 'true');
       }
       disconnectSocket();
       set({
@@ -270,6 +275,16 @@ export const createAuthSlice: StateCreator<ChatState, [], [], AuthSlice> = (set,
           );
         }
       }
+      return;
+    }
+
+    // Standalone mode: Check if user explicitly logged out on this machine
+    const isExplicitlyLoggedOut =
+      typeof window !== 'undefined' &&
+      localStorage.getItem('enterprise_chat_logged_out') === 'true';
+
+    if (isExplicitlyLoggedOut) {
+      set({ token: null, currentUser: null, isAuthModalOpen: true });
       return;
     }
 

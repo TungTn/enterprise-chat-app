@@ -23,9 +23,22 @@ export class AuthService {
     private readonly configService: ConfigService,
   ) {}
 
+  private isLoopback(ip: string): boolean {
+    const clean = ip ? ip.replace(/^.*:/, '').trim() : '';
+    return (
+      !clean ||
+      clean === 'default' ||
+      clean === '127.0.0.1' ||
+      clean === '::1' ||
+      clean === '1' ||
+      clean === 'localhost' ||
+      clean === 'unknown'
+    );
+  }
+
   getSyncedSession(ip: string) {
-    const cleanIp = ip ? ip.replace(/^.*:/, '').trim() : '';
-    if (!cleanIp || cleanIp === 'default') return null;
+    if (this.isLoopback(ip)) return null;
+    const cleanIp = ip.replace(/^.*:/, '').trim();
     const session = this.syncedSessions.get(cleanIp);
     if (!session) return null;
     // Session TTL: 2 hours
@@ -37,14 +50,21 @@ export class AuthService {
   }
 
   setSyncedSession(ip: string, sessionData: any) {
-    const cleanIp = ip ? ip.replace(/^.*:/, '').trim() : '';
-    if (!cleanIp || cleanIp === 'default') return null;
+    if (this.isLoopback(ip)) return null;
+    const cleanIp = ip.replace(/^.*:/, '').trim();
     const payload = {
       ...sessionData,
       timestamp: Date.now(),
     };
     this.syncedSessions.set(cleanIp, payload);
     return payload;
+  }
+
+  clearSyncedSession(ip: string) {
+    const cleanIp = ip ? ip.replace(/^.*:/, '').trim() : '';
+    if (cleanIp) {
+      this.syncedSessions.delete(cleanIp);
+    }
   }
 
   async register(dto: RegisterDto) {
@@ -341,7 +361,7 @@ export class AuthService {
     }
   }
 
-  async logout(userId: string) {
+  async logout(userId: string, ipAddress?: string) {
     await this.prisma.user.update({
       where: { id: userId },
       data: { status: PresenceStatus.OFFLINE },
@@ -350,6 +370,10 @@ export class AuthService {
     await this.prisma.session.deleteMany({
       where: { userId },
     });
+
+    if (ipAddress) {
+      this.clearSyncedSession(ipAddress);
+    }
 
     return { success: true, message: 'Đăng xuất thành công' };
   }

@@ -19,6 +19,9 @@ async function bootstrap() {
 
   const isDev = process.env.NODE_ENV !== 'production';
 
+  const expressApp = app.getHttpAdapter().getInstance();
+  expressApp.set('trust proxy', true);
+
   app.setGlobalPrefix('api');
 
   app.enableCors({

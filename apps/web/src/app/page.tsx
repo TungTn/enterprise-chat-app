@@ -13,6 +13,7 @@ import FloatingChatWidget from '@/components/chat/FloatingChatWidget';
 // Modals
 import AiSummaryModal from '@/components/modals/AiSummaryModal';
 import CallModal from '@/components/modals/CallModal';
+import IncomingCallModal from '@/components/modals/IncomingCallModal';
 import CreatePollModal from '@/components/modals/CreatePollModal';
 import CreateGroupModal from '@/components/modals/CreateGroupModal';
 import SettingsModal from '@/components/modals/SettingsModal';
@@ -84,6 +85,7 @@ export default function ChatApp() {
     updateUserProfile,
     isScreenLocked,
     setScreenLocked,
+    callNotice,
     t,
   } = useChatStore();
 
@@ -869,9 +871,18 @@ export default function ChatApp() {
       {/* Floating Chat Widget (Always available at bottom right) */}
       {!isEmbedded && <FloatingChatWidget />}
 
+      {/* Floating Call Notification Toast */}
+      {callNotice && (
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[110] bg-slate-900/95 border border-slate-700/80 text-white px-5 py-2.5 rounded-2xl shadow-2xl flex items-center gap-2.5 text-xs font-semibold animate-in fade-in slide-in-from-top-4 duration-300">
+          <Phone className="w-4 h-4 text-emerald-400" />
+          <span>{callNotice}</span>
+        </div>
+      )}
+
       {/* System Modals */}
       <AiSummaryModal />
       <CallModal />
+      <IncomingCallModal />
       <CreatePollModal />
       <CreateGroupModal />
       <GroupManagementModal />

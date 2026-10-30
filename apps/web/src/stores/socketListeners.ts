@@ -4,7 +4,13 @@ import {
   PresenceStatus,
   MessageDeliveryStatus,
 } from '@enterprise-chat/shared-types';
-import { playMessageReceivedSound } from '@/lib/soundService';
+import {
+  playMessageReceivedSound,
+  playCallRingtone,
+  stopCallRingtone,
+  playCallEndSound,
+} from '@/lib/soundService';
+import { webrtcService } from '@/lib/webrtcService';
 import { ChatState } from './types';
 
 export function setupStoreSocketListeners(
@@ -260,5 +266,79 @@ export function setupStoreSocketListeners(
       syncDeltaMessages(activeConversationId);
     }
     processOutboxQueue();
+  });
+
+  // --- WebRTC 1-1 Call Signalling Listeners ---
+  socket.off('call:incoming');
+  socket.on('call:incoming', (data: any) => {
+    if (!data) return;
+    get().setIncomingCall(data);
+    playCallRingtone();
+  });
+
+  socket.off('call:accepted');
+  socket.on('call:accepted', async (data: any) => {
+    stopCallRingtone();
+    set((state) => ({
+      activeCall: state.activeCall ? { ...state.activeCall, status: 'connected' } : null,
+    }));
+    const iceServers = await get().fetchIceServers();
+    webrtcService.initCall({
+      targetUserId: data.receiverId,
+      callId: data.callId,
+      isCaller: true,
+      iceServers,
+      callType: get().activeCall?.type || 'audio',
+      onEnd: () => {
+        get().endCall();
+      },
+      onError: (err: any) => {
+        console.warn('[WebRTC] Notice on caller:', err);
+        const errMsg = typeof err === 'string' ? err : err?.message || 'Không thể truy cập Microphone/Camera';
+        get().setCallNotice(errMsg);
+      },
+    });
+  });
+
+  socket.off('call:signal');
+  socket.on('call:signal', (data: any) => {
+    if (data?.signal) {
+      webrtcService.handleSignal(data.signal);
+    }
+  });
+
+  socket.off('call:rejected');
+  socket.on('call:rejected', () => {
+    stopCallRingtone();
+    playCallEndSound();
+    webrtcService.endCall();
+    get().setCallNotice('Đối phương đã từ chối cuộc gọi');
+    set(() => ({
+      activeCall: null,
+      incomingCall: null,
+      isCallModalOpen: false,
+    }));
+  });
+
+  socket.off('call:ended');
+  socket.on('call:ended', (data: any) => {
+    stopCallRingtone();
+    playCallEndSound();
+    webrtcService.endCall();
+    const status = data?.callStatus || 'completed';
+    const duration = data?.durationSeconds || 0;
+    const mins = Math.floor(duration / 60);
+    const secs = duration % 60;
+    const formattedDuration = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    const notice =
+      status === 'missed'
+        ? 'Cuộc gọi nhỡ'
+        : `Cuộc gọi đã kết thúc (${formattedDuration})`;
+    get().setCallNotice(notice);
+    set(() => ({
+      activeCall: null,
+      incomingCall: null,
+      isCallModalOpen: false,
+    }));
   });
 }

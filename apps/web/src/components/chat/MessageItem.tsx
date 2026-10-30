@@ -21,12 +21,30 @@ import {
   CheckCheck,
   Search,
   Eye,
+  Phone,
+  PhoneOff,
+  Video,
 } from 'lucide-react';
 
 import { formatMessageTime, formatFullDateTime } from '@/lib/formatDate';
 
 interface Props {
   message: ChatMessage;
+}
+
+interface CallLogData {
+  type: 'audio' | 'video';
+  status: 'missed' | 'declined' | 'completed';
+  duration: number;
+}
+
+function parseCallLog(content: string): CallLogData | null {
+  if (!content || !content.startsWith('[CALL_LOG]:')) return null;
+  try {
+    return JSON.parse(content.substring('[CALL_LOG]:'.length));
+  } catch {
+    return null;
+  }
 }
 
 const COMMON_EMOJIS = ['👍', '❤️', '🎉', '🔥', '👏', '🚀'];
@@ -44,6 +62,7 @@ export default function MessageItem({ message }: Props) {
     conversations,
     setActiveConversationId,
     createDirectApi,
+    startCall,
     toggleReaction,
     setReplyingMessage,
     setEditingMessage,
@@ -216,6 +235,72 @@ export default function MessageItem({ message }: Props) {
   );
 
   const isMentioned = hasAllMention || isDirectlyMentioned;
+
+  const callLog = parseCallLog(message.content);
+
+  if (callLog) {
+    const isMissed = callLog.status === 'missed';
+    const declines = callLog.status === 'declined';
+    const isCompleted = callLog.status === 'completed';
+    const isVideo = callLog.type === 'video';
+
+    // Format duration text
+    const mins = Math.floor((callLog.duration || 0) / 60);
+    const secs = (callLog.duration || 0) % 60;
+    const durationText = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+
+    let title = '';
+    let subtitle = '';
+    let badgeColor = '';
+    let icon = null;
+
+    if (isCompleted) {
+      title = isVideo ? 'Cuộc gọi video' : 'Cuộc gọi thoại';
+      subtitle = `Thời lượng: ${durationText}`;
+      badgeColor = 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400';
+      icon = isVideo ? <Video className="w-4 h-4 text-emerald-400" /> : <Phone className="w-4 h-4 text-emerald-400" />;
+    } else if (declines) {
+      title = isSelf ? 'Cuộc gọi bị từ chối' : 'Đã từ chối cuộc gọi';
+      subtitle = isSelf ? 'Đối phương hiện không thể nghe máy' : 'Cuộc gọi đã bị từ chối';
+      badgeColor = 'border-rose-500/30 bg-rose-500/10 text-rose-400';
+      icon = <PhoneOff className="w-4 h-4 text-rose-400" />;
+    } else {
+      // Missed / Cancelled
+      title = isSelf ? 'Cuộc gọi đi không trả lời' : 'Cuộc gọi nhỡ';
+      subtitle = isSelf ? 'Đã hủy cuộc gọi' : 'Nhấn gọi lại để liên hệ ngay';
+      badgeColor = isSelf
+        ? 'border-slate-700 bg-slate-800/80 text-slate-300'
+        : 'border-red-500/40 bg-red-500/15 text-red-400';
+      icon = isSelf ? <PhoneOff className="w-4 h-4 text-slate-400" /> : <PhoneOff className="w-4 h-4 text-red-400 animate-pulse" />;
+    }
+
+    return (
+      <div className={`flex w-full my-2 px-4 ${isSelf ? 'justify-end' : 'justify-start'}`}>
+        <div className={`flex items-center gap-3 p-3.5 rounded-2xl border shadow-lg backdrop-blur-sm max-w-sm select-none ${badgeColor}`}>
+          <div className="w-10 h-10 rounded-xl bg-slate-900/60 flex items-center justify-center flex-shrink-0 shadow-inner">
+            {icon}
+          </div>
+          <div className="flex-1 min-w-0 pr-1">
+            <div className="flex items-center justify-between gap-2">
+              <h4 className="font-bold text-xs truncate text-white">{title}</h4>
+              <span className="text-[10px] text-slate-400 font-mono flex-shrink-0">
+                {formatMessageTime(message.createdAt)}
+              </span>
+            </div>
+            <p className="text-[11px] opacity-80 mt-0.5 truncate">{subtitle}</p>
+          </div>
+          <button
+            onClick={() => startCall(callLog.type || 'audio')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-md transition-all active:scale-95 flex-shrink-0"
+            title="Gọi lại ngay"
+          >
+            <Phone className="w-3.5 h-3.5" />
+            <span>Gọi lại</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
