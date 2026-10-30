@@ -1,10 +1,10 @@
-﻿name: Enterprise Chat CI
+name: Enterprise Chat CI
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, 'feature/**', dev, develop ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ main, master, 'feature/**', dev, develop ]
 
 jobs:
   typecheck-and-build:
@@ -31,6 +31,9 @@ jobs:
 
       - name: Build Shared Types
         run: pnpm --filter @enterprise-chat/shared-types build
+
+      - name: Generate Prisma Client
+        run: pnpm --filter @enterprise-chat/server run db:generate
 
       - name: Typecheck Backend Server
         run: pnpm --filter @enterprise-chat/server exec tsc --noEmit
