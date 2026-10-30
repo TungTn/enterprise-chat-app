@@ -1,4 +1,12 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+export function getApiBaseUrl(): string {
+  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
+  if (typeof window !== 'undefined') {
+    // Calling /api on the same port (3000) avoids Windows Firewall blocking port 4000
+    // Next.js rewrites transparently proxies /api to port 4000 internally!
+    return '/api';
+  }
+  return 'http://localhost:4000/api';
+}
 
 export async function apiRequest<T>(
   endpoint: string,
@@ -8,11 +16,13 @@ export async function apiRequest<T>(
   const headers = new Headers(options.headers || {});
   headers.set('Content-Type', 'application/json');
 
-  if (token) {
-    headers.set('Authorization', `Bearer ${token}`);
+  const authToken = token || (typeof window !== 'undefined' ? localStorage.getItem('enterprise_chat_token') : null);
+  if (authToken && authToken !== 'mock-token-admin') {
+    headers.set('Authorization', `Bearer ${authToken}`);
   }
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+  const baseUrl = getApiBaseUrl();
+  const response = await fetch(`${baseUrl}${endpoint}`, {
     ...options,
     headers,
   });

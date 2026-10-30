@@ -2,23 +2,137 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ==================== ENTERPRISE CHAT THEMES ==================== */
+
+/* 1. Mặc định Enterprise Blue (dots) */
+[data-theme="dots"],
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
+  --app-bg: #0b0f19;
+  --app-header: #0f172a;
+  --app-sidebar: #0f172a;
+  --app-chat-bg: #020617;
+  --app-card: #1e293b;
+  --app-card-subtle: #0f172a;
+  --app-border: #1e293b;
+  --app-primary: #2563eb;
+  --app-primary-hover: #1d4ed8;
+  --app-primary-light: rgba(37, 99, 235, 0.15);
+  --app-accent: #3b82f6;
+  --app-text-main: #f8fafc;
+  --app-text-muted: #94a3b8;
+  --app-active-bubble: #2563eb;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0f172a;
-    --foreground: #f8fafc;
-  }
+/* 2. Tối huyền bí (Midnight Dark / OLED Pure Black) */
+[data-theme="dark"] {
+  --app-bg: #000000;
+  --app-header: #070709;
+  --app-sidebar: #0a0a0d;
+  --app-chat-bg: #000000;
+  --app-card: #141418;
+  --app-card-subtle: #09090b;
+  --app-border: #222228;
+  --app-primary: #0284c7;
+  --app-primary-hover: #0369a1;
+  --app-primary-light: rgba(2, 132, 199, 0.15);
+  --app-accent: #38bdf8;
+  --app-text-main: #ffffff;
+  --app-text-muted: #a1a1aa;
+  --app-active-bubble: #0284c7;
+}
+
+/* 3. Tím Viber (Viber Purple / Royal Indigo) */
+[data-theme="indigo"] {
+  --app-bg: #0d081b;
+  --app-header: #150d2b;
+  --app-sidebar: #170e30;
+  --app-chat-bg: #0a0616;
+  --app-card: #24164a;
+  --app-card-subtle: #180f33;
+  --app-border: #331f66;
+  --app-primary: #7c3aed;
+  --app-primary-hover: #6d28d9;
+  --app-primary-light: rgba(124, 58, 237, 0.18);
+  --app-accent: #a78bfa;
+  --app-text-main: #f5f3ff;
+  --app-text-muted: #c4b5fd;
+  --app-active-bubble: #7c3aed;
+}
+
+/* 4. Xanh Bạc Hà (Emerald Mint / Forest) */
+[data-theme="emerald"] {
+  --app-bg: #02120d;
+  --app-header: #051d15;
+  --app-sidebar: #062118;
+  --app-chat-bg: #010c08;
+  --app-card: #0b3427;
+  --app-card-subtle: #07251b;
+  --app-border: #134e3b;
+  --app-primary: #059669;
+  --app-primary-hover: #047857;
+  --app-primary-light: rgba(5, 150, 105, 0.18);
+  --app-accent: #34d399;
+  --app-text-main: #ecfdf5;
+  --app-text-muted: #a7f3d0;
+  --app-active-bubble: #059669;
+}
+
+/* 5. Tối giản (Minimal Clean / Graphite Neutral) */
+[data-theme="minimal"] {
+  --app-bg: #121316;
+  --app-header: #18191d;
+  --app-sidebar: #1a1b20;
+  --app-chat-bg: #0f1012;
+  --app-card: #26272e;
+  --app-card-subtle: #1c1d22;
+  --app-border: #2e303a;
+  --app-primary: #475569;
+  --app-primary-hover: #334155;
+  --app-primary-light: rgba(71, 85, 105, 0.2);
+  --app-accent: #94a3b8;
+  --app-text-main: #f1f5f9;
+  --app-text-muted: #94a3b8;
+  --app-active-bubble: #475569;
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
+  color: var(--app-text-main);
+  background: var(--app-bg);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   user-select: none;
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+/* Theme utility bindings */
+.theme-bg-root {
+  background-color: var(--app-bg) !important;
+}
+.theme-bg-header {
+  background-color: var(--app-header) !important;
+  border-color: var(--app-border) !important;
+}
+.theme-bg-sidebar {
+  background-color: var(--app-sidebar) !important;
+  border-color: var(--app-border) !important;
+}
+.theme-bg-chat {
+  background-color: var(--app-chat-bg) !important;
+}
+.theme-bg-card {
+  background-color: var(--app-card) !important;
+  border-color: var(--app-border) !important;
+}
+.theme-border {
+  border-color: var(--app-border) !important;
+}
+.theme-primary-bg {
+  background-color: var(--app-primary) !important;
+}
+.theme-primary-hover:hover {
+  background-color: var(--app-primary-hover) !important;
+}
+.theme-accent-text {
+  color: var(--app-accent) !important;
 }
 
 /* Custom scrollbars for desktop client feel */
@@ -32,10 +146,10 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.4);
+  background: rgba(148, 163, 184, 0.35);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.7);
+  background: rgba(148, 163, 184, 0.65);
 }

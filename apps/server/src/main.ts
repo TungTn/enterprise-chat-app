@@ -2,10 +2,14 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
+import { RedisIoAdapter } from './adapters/redis-io.adapter';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    bodyParser: true,
+    rawBody: true,
+  });
 
   const configService = app.get(ConfigService);
   const port = configService.get<number>('PORT') || 4000;
@@ -24,11 +28,20 @@ async function bootstrap() {
 
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true,
+      whitelist: false,
       transform: true,
-      forbidNonWhitelisted: true,
+      forbidNonWhitelisted: false,
     }),
   );
+
+  // Attach Redis IO Adapter for horizontal multi-instance scaling
+  const redisIoAdapter = new RedisIoAdapter(app);
+  await redisIoAdapter.connectToRedis(
+    configService.get<string>('REDIS_HOST') || 'localhost',
+    configService.get<number>('REDIS_PORT') || 6379,
+    configService.get<string>('REDIS_PASSWORD') || undefined,
+  );
+  app.useWebSocketAdapter(redisIoAdapter);
 
   await app.listen(port);
   logger.log(`🚀 Enterprise Chat Backend running on: http://localhost:${port}/api`);

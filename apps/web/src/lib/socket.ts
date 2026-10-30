@@ -2,9 +2,19 @@ import { io, Socket } from 'socket.io-client';
 
 let socket: Socket | null = null;
 
+export function getWsUrl(): string {
+  if (process.env.NEXT_PUBLIC_WS_URL) return process.env.NEXT_PUBLIC_WS_URL;
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
+    return `${protocol}//${host}:4000/chat`;
+  }
+  return 'http://localhost:4000/chat';
+}
+
 export function getSocket(token?: string): Socket {
   if (!socket && token) {
-    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:4000/chat';
+    const wsUrl = getWsUrl();
     socket = io(wsUrl, {
       auth: { token },
       autoConnect: true,

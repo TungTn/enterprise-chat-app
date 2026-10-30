@@ -1,11 +1,15 @@
 import { Injectable, NotFoundException, ForbiddenException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { RedisService } from '../redis/redis.service';
 import { CreateChannelDto } from './dto/create-channel.dto';
 import { ChannelMemberRole, ChannelScope, ConversationType } from '@enterprise-chat/shared-types';
 
 @Injectable()
 export class ChannelsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly redisService: RedisService,
+  ) {}
 
   async createChannel(userId: string, dto: CreateChannelDto) {
     const channel = await this.prisma.conversation.create({
@@ -55,6 +59,7 @@ export class ChannelsService {
       });
     }
 
+    await this.redisService.invalidateConversationMembers(channel.id);
     return this.getChannelById(channel.id, userId);
   }
 
@@ -74,6 +79,7 @@ export class ChannelsService {
                     avatarUrl: true,
                     role: true,
                     status: true,
+                    phoneNumber: true,
                   },
                 },
               },
@@ -91,19 +97,61 @@ export class ChannelsService {
       orderBy: { conversation: { updatedAt: 'desc' } },
     });
 
-    return memberships.map((m) => {
+    // Pre-fetch lastRead messages to compare sequence/timestamp
+    const lastReadIds = memberships
+      .map((m) => m.lastReadMessageId)
+      .filter(Boolean) as string[];
+
+    const lastReadMsgs = lastReadIds.length > 0
+      ? await this.prisma.message.findMany({
+          where: { id: { in: lastReadIds } },
+          select: { id: true, createdAt: true, sequenceNumber: true },
+        })
+      : [];
+    const lastReadMap = new Map(lastReadMsgs.map((msg) => [msg.id, msg]));
+
+    const counts = await Promise.all(
+      memberships.map(async (m) => {
+        const lastRead = m.lastReadMessageId ? lastReadMap.get(m.lastReadMessageId) : null;
+        if (!lastRead) {
+          return this.prisma.message.count({
+            where: {
+              conversationId: m.conversationId,
+              senderId: { not: userId },
+            },
+          });
+        }
+        return this.prisma.message.count({
+          where: {
+            conversationId: m.conversationId,
+            senderId: { not: userId },
+            ...(lastRead.sequenceNumber != null
+              ? { sequenceNumber: { gt: lastRead.sequenceNumber } }
+              : { createdAt: { gt: lastRead.createdAt } }),
+          },
+        });
+      })
+    );
+
+    return memberships.map((m, idx) => {
       const conv = m.conversation;
       const lastMsg = conv.messages[0] || null;
+      const otherMember = conv.members.find((mem) => mem.userId !== userId);
+      const displayName =
+        conv.type === ConversationType.DIRECT
+          ? conv.name || otherMember?.user?.fullName || 'Trò chuyện 1-1'
+          : conv.name;
+
       return {
         id: conv.id,
         type: conv.type,
-        name: conv.name,
+        name: displayName,
         scope: conv.scope,
         description: conv.description,
         departmentId: conv.departmentId,
         myRole: m.role,
         lastReadMessageId: m.lastReadMessageId,
-        unreadCount: 0, // calculate if needed
+        unreadCount: counts[idx] || 0,
         lastMessage: lastMsg
           ? {
               id: lastMsg.id,
@@ -133,6 +181,7 @@ export class ChannelsService {
                 avatarUrl: true,
                 role: true,
                 status: true,
+                phoneNumber: true,
               },
             },
           },
@@ -157,6 +206,24 @@ export class ChannelsService {
       throw new ConflictException('Không thể tự tạo hội thoại riêng với chính mình');
     }
 
+    // Verify target user exists
+    const targetUser = await this.prisma.user.findUnique({
+      where: { id: targetUserId },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        avatarUrl: true,
+        role: true,
+        status: true,
+        phoneNumber: true,
+      },
+    });
+
+    if (!targetUser) {
+      throw new NotFoundException(`Không tìm thấy người dùng với ID: ${targetUserId}`);
+    }
+
     // Check if direct conversation already exists between these 2 users
     const existing = await this.prisma.conversation.findFirst({
       where: {
@@ -177,6 +244,7 @@ export class ChannelsService {
                 avatarUrl: true,
                 role: true,
                 status: true,
+                phoneNumber: true,
               },
             },
           },
@@ -184,39 +252,52 @@ export class ChannelsService {
       },
     });
 
-    if (existing) {
-      return existing;
+    let conv = existing;
+
+    if (!conv) {
+      // Create new direct conversation
+      conv = await this.prisma.conversation.create({
+        data: {
+          type: ConversationType.DIRECT,
+          members: {
+            create: [
+              { userId, role: ChannelMemberRole.MEMBER },
+              { userId: targetUserId, role: ChannelMemberRole.MEMBER },
+            ],
+          },
+        },
+        include: {
+          members: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  email: true,
+                  fullName: true,
+                  avatarUrl: true,
+                  role: true,
+                  status: true,
+                  phoneNumber: true,
+                },
+              },
+            },
+          },
+        },
+      });
+      await this.redisService.setConversationMembers(conv.id, [userId, targetUserId]);
     }
 
-    // Create new direct conversation
-    const newConv = await this.prisma.conversation.create({
-      data: {
-        type: ConversationType.DIRECT,
-        members: {
-          create: [
-            { userId, role: ChannelMemberRole.MEMBER },
-            { userId: targetUserId, role: ChannelMemberRole.MEMBER },
-          ],
-        },
-      },
-      include: {
-        members: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                email: true,
-                fullName: true,
-                avatarUrl: true,
-                role: true,
-                status: true,
-              },
-            },
-          },
-        },
-      },
-    });
-
-    return newConv;
+    const otherMember = conv.members.find((m) => m.userId !== userId);
+    return {
+      id: conv.id,
+      type: conv.type,
+      name: conv.name || otherMember?.user?.fullName || targetUser.fullName || 'Trò chuyện 1-1',
+      scope: conv.scope,
+      description: conv.description,
+      departmentId: conv.departmentId,
+      unreadCount: 0,
+      lastMessage: null,
+      members: conv.members.map((mem) => mem.user),
+    };
   }
 }

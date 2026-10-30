@@ -27,7 +27,14 @@ export class UsersController {
   @Patch('profile')
   async updateProfile(
     @CurrentUser() user: { id: string },
-    @Body() body: { status?: PresenceStatus; statusMessage?: string; avatarUrl?: string },
+    @Body()
+    body: {
+      status?: PresenceStatus;
+      statusMessage?: string;
+      avatarUrl?: string;
+      phoneNumber?: string | null;
+      fullName?: string;
+    },
   ) {
     return this.usersService.updateProfile(user.id, body);
   }

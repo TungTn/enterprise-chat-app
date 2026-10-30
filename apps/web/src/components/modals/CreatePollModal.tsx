@@ -4,9 +4,15 @@ import React, { useState } from 'react';
 import { useChatStore } from '@/stores/useChatStore';
 import { X, Plus, Trash2, BarChart2 } from 'lucide-react';
 import { MessageType } from '@enterprise-chat/shared-types';
+import { useModalDismiss } from '@/hooks/useModalDismiss';
 
 export default function CreatePollModal() {
   const { isCreatePollOpen, toggleCreatePoll, sendMessage, activeConversationId } = useChatStore();
+
+  const { handleBackdropClick } = useModalDismiss({
+    isOpen: isCreatePollOpen,
+    onClose: () => toggleCreatePoll(false),
+  });
 
   const [question, setQuestion] = useState('');
   const [options, setOptions] = useState(['Đồng ý', 'Cần thảo luận thêm']);
@@ -65,8 +71,14 @@ export default function CreatePollModal() {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 select-none">
-      <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
+    <div
+      onClick={handleBackdropClick}
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 select-none"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200"
+      >
         {/* Header */}
         <div className="p-4 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-2">

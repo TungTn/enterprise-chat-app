@@ -12,8 +12,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="vi">
-      <body className="h-screen w-screen overflow-hidden antialiased select-none">
+    <html lang="vi" suppressHydrationWarning>
+      <body className="h-screen w-screen overflow-hidden antialiased select-none" suppressHydrationWarning>
         {children}
       </body>
     </html>

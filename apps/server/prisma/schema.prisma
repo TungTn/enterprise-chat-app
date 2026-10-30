@@ -45,6 +45,12 @@ enum MessageType {
   SYSTEM
 }
 
+enum MessageDeliveryStatus {
+  SENT
+  DELIVERED
+  READ
+}
+
 model Department {
   id          String   @id @default(uuid())
   name        String   @unique
@@ -69,6 +75,7 @@ model User {
   role           UserRole       @default(EMPLOYEE)
   status         PresenceStatus @default(OFFLINE)
   statusMessage  String?
+  phoneNumber    String?
   departmentId   String?
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
@@ -102,15 +109,16 @@ model Session {
 }
 
 model Conversation {
-  id           String           @id @default(uuid())
-  type         ConversationType @default(CHANNEL)
-  name         String?
-  scope        ChannelScope?    @default(DEPARTMENT)
-  description  String?
-  departmentId String?
-  createdById  String?
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
+  id                 String           @id @default(uuid())
+  type               ConversationType @default(CHANNEL)
+  name               String?
+  scope              ChannelScope?    @default(DEPARTMENT)
+  description        String?
+  departmentId       String?
+  createdById        String?
+  lastSequenceNumber Int              @default(0)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
 
   department   Department?      @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   members      ConversationMember[]
@@ -139,16 +147,19 @@ model ConversationMember {
 }
 
 model Message {
-  id             String          @id @default(uuid())
-  conversationId String
-  senderId       String
-  parentId       String?
-  content        String
-  type           MessageType     @default(TEXT)
-  isEdited       Boolean         @default(false)
-  isDeleted      Boolean         @default(false)
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  id              String                @id @default(uuid())
+  conversationId  String
+  senderId        String
+  parentId        String?
+  clientMessageId String?
+  sequenceNumber  Int?
+  deliveryStatus  MessageDeliveryStatus @default(SENT)
+  content         String
+  type            MessageType           @default(TEXT)
+  isEdited        Boolean               @default(false)
+  isDeleted       Boolean               @default(false)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
 
   conversation   Conversation    @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   sender         User            @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
@@ -157,6 +168,8 @@ model Message {
   reactions      MessageReaction[]
   attachments    Attachment[]
 
+  @@unique([conversationId, clientMessageId])
+  @@index([conversationId, sequenceNumber])
   @@index([conversationId, createdAt])
   @@index([parentId])
   @@map("messages")

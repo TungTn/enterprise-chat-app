@@ -12,7 +12,8 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { ChatService } from './chat.service';
 import { PrismaService } from '../../prisma/prisma.service';
-import { SOCKET_EVENTS, SendMessageDto, PresenceStatus } from '@enterprise-chat/shared-types';
+import { RedisService } from '../redis/redis.service';
+import { SOCKET_EVENTS, SendMessageDto, PresenceStatus, MessageAckDto } from '@enterprise-chat/shared-types';
 
 interface AuthenticatedSocket extends Socket {
   user?: {
@@ -42,6 +43,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly configService: ConfigService,
     private readonly chatService: ChatService,
     private readonly prisma: PrismaService,
+    private readonly redisService: RedisService,
   ) {}
 
   async handleConnection(client: AuthenticatedSocket) {
@@ -74,11 +76,16 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       // Track socket connection
       if (!this.activeUsers.has(user.id)) {
         this.activeUsers.set(user.id, new Set());
-        // User came online
-        await this.prisma.user.update({
-          where: { id: user.id },
-          data: { status: PresenceStatus.ONLINE },
-        });
+        // Record in Redis Presence cache immediately (O(1))
+        this.redisService.setUserPresence(user.id, PresenceStatus.ONLINE).catch(() => {});
+        // Non-blocking update to PostgreSQL
+        this.prisma.user
+          .update({
+            where: { id: user.id },
+            data: { status: PresenceStatus.ONLINE },
+          })
+          .catch((err) => console.warn('Could not update user status to ONLINE in DB:', err));
+
         this.server.emit(SOCKET_EVENTS.PRESENCE_CHANGE, {
           userId: user.id,
           status: PresenceStatus.ONLINE,
@@ -88,8 +95,66 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       // Join user-specific notification room
       client.join(`user:${user.id}`);
+
+      // Join IP-specific room for local machine coordination
+      const clientIp = this.getClientIp(client);
+      if (clientIp && clientIp !== 'unknown') {
+        client.join(`client_ip:${clientIp}`);
+      }
+
+      // Auto-join all conversation rooms the user is in
+      const memberships = await this.prisma.conversationMember.findMany({
+        where: { userId: user.id },
+        select: { conversationId: true },
+      });
+      for (const m of memberships) {
+        client.join(`conversation:${m.conversationId}`);
+      }
     } catch {
       client.disconnect();
+    }
+  }
+
+  private getClientIp(client: any): string {
+    const forwarded = client.handshake?.headers?.['x-forwarded-for'];
+    if (forwarded) {
+      const raw = Array.isArray(forwarded) ? forwarded[0] : forwarded.split(',')[0];
+      return raw.trim().replace(/^.*:/, '');
+    }
+    const addr = client.handshake?.address || '';
+    return addr.replace(/^.*:/, '').trim() || 'unknown';
+  }
+
+  async broadcastNewMessage(message: any) {
+    if (this.server && message && message.conversationId) {
+      try {
+        // 1. Try Redis cache first (0ms DB delay)
+        let memberIds = await this.redisService.getConversationMembers(message.conversationId);
+
+        if (!memberIds || memberIds.length === 0) {
+          // Cache miss: Query PostgreSQL once and cache in Redis for 1 hour
+          const members = await this.prisma.conversationMember.findMany({
+            where: { conversationId: message.conversationId },
+            select: { userId: true },
+          });
+          memberIds = members.map((m) => m.userId);
+          await this.redisService.setConversationMembers(message.conversationId, memberIds);
+        }
+
+        // In Socket.IO, passing an array of rooms to .to(rooms) targets the union of rooms
+        // and automatically deduplicates connected sockets so each client receives the event EXACTLY ONCE!
+        const targetRooms = [
+          `conversation:${message.conversationId}`,
+          ...memberIds.map((uid) => `user:${uid}`),
+        ];
+
+        this.server.to(targetRooms).emit(SOCKET_EVENTS.NEW_MESSAGE, message);
+      } catch (err) {
+        console.warn('Error broadcasting to member user rooms:', err);
+        this.server
+          .to(`conversation:${message.conversationId}`)
+          .emit(SOCKET_EVENTS.NEW_MESSAGE, message);
+      }
     }
   }
 
@@ -102,11 +167,16 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       userSockets.delete(client.id);
       if (userSockets.size === 0) {
         this.activeUsers.delete(userId);
-        // User went offline
-        await this.prisma.user.update({
-          where: { id: userId },
-          data: { status: PresenceStatus.OFFLINE },
-        });
+        // Record in Redis Presence cache immediately
+        this.redisService.setUserPresence(userId, PresenceStatus.OFFLINE).catch(() => {});
+        // Non-blocking update to PostgreSQL
+        this.prisma.user
+          .update({
+            where: { id: userId },
+            data: { status: PresenceStatus.OFFLINE },
+          })
+          .catch((err) => console.warn('Could not update user status to OFFLINE in DB:', err));
+
         this.server.emit(SOCKET_EVENTS.PRESENCE_CHANGE, {
           userId,
           status: PresenceStatus.OFFLINE,
@@ -143,10 +213,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     const message = await this.chatService.sendMessage(client.user.id, dto);
 
-    // Broadcast message to everyone in the conversation room
-    this.server
-      .to(`conversation:${dto.conversationId}`)
-      .emit(SOCKET_EVENTS.NEW_MESSAGE, message);
+    // Broadcast message to everyone in the conversation
+    await this.broadcastNewMessage(message);
 
     return message;
   }
@@ -239,6 +307,29 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     });
   }
 
+  @SubscribeMessage(SOCKET_EVENTS.SET_PRESENCE)
+  async handleSetPresence(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() data: { status: PresenceStatus },
+  ) {
+    if (!client.user || !data?.status) return;
+    // Update Redis cache immediately (O(1))
+    this.redisService.setUserPresence(client.user.id, data.status).catch(() => {});
+    // Non-blocking update to PostgreSQL
+    this.prisma.user
+      .update({
+        where: { id: client.user.id },
+        data: { status: data.status },
+      })
+      .catch((err) => console.warn('Could not update user presence in DB:', err));
+
+    this.server.emit(SOCKET_EVENTS.PRESENCE_CHANGE, {
+      userId: client.user.id,
+      status: data.status,
+    });
+    return { success: true };
+  }
+
   @SubscribeMessage(SOCKET_EVENTS.MARK_READ)
   async handleMarkRead(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -252,10 +343,55 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       data.messageId,
     );
 
-    client
+    this.server
       .to(`conversation:${data.conversationId}`)
       .emit(SOCKET_EVENTS.READ_RECEIPT, receipt);
 
+    this.server
+      .to(`user:${client.user.id}`)
+      .emit(SOCKET_EVENTS.READ_RECEIPT, receipt);
+
     return receipt;
+  }
+
+  @SubscribeMessage(SOCKET_EVENTS.MESSAGE_ACK)
+  async handleMessageAck(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() data: MessageAckDto,
+  ) {
+    if (!client.user) return;
+
+    const result = await this.chatService.updateDeliveryStatus(
+      data.messageId,
+      client.user.id,
+      data.status,
+    );
+
+    if (result) {
+      this.server
+        .to(`conversation:${result.conversationId}`)
+        .emit(SOCKET_EVENTS.DELIVERY_STATUS_UPDATED, {
+          messageId: result.messageId,
+          conversationId: result.conversationId,
+          deliveryStatus: result.status,
+          senderId: result.senderId,
+          ackUserId: client.user.id,
+        });
+    }
+
+    return result;
+  }
+
+  @SubscribeMessage('SYNC_SESSION')
+  handleSyncSession(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() data: any,
+  ) {
+    const clientIp = this.getClientIp(client);
+    if (this.server && data && clientIp && clientIp !== 'unknown') {
+      // ONLY broadcast to sockets belonging to the EXACT same workstation/IP!
+      client.to(`client_ip:${clientIp}`).emit('SYNC_SESSION_CHANGED', data);
+    }
+    return { success: true };
   }
 }

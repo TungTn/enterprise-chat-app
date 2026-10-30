@@ -1,11 +1,23 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useChatStore } from '@/stores/useChatStore';
 import { Search, ChevronUp, ChevronDown, X } from 'lucide-react';
 
 export default function InChatSearchBar() {
   const { isSearchOpen, toggleSearch, searchQuery, setSearchQuery } = useChatStore();
+
+  useEffect(() => {
+    if (!isSearchOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSearchQuery('');
+        toggleSearch(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isSearchOpen, setSearchQuery, toggleSearch]);
 
   if (!isSearchOpen) return null;
 

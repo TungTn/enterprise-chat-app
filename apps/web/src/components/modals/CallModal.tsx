@@ -12,7 +12,11 @@ import {
   Minimize2,
   Maximize2,
   Users,
+  Phone,
+  ExternalLink,
 } from 'lucide-react';
+import { useModalDismiss } from '@/hooks/useModalDismiss';
+import GroupVideoRoom from '@/components/chat/GroupVideoRoom';
 
 export default function CallModal() {
   const {
@@ -23,7 +27,15 @@ export default function CallModal() {
     toggleVideo,
     toggleScreenShare,
     toggleCallMinimize,
+    conversations,
+    currentUser,
+    token,
   } = useChatStore();
+
+  const { handleBackdropClick } = useModalDismiss({
+    isOpen: isCallModalOpen && !activeCall?.isMinimized,
+    onClose: toggleCallMinimize,
+  });
 
   const [seconds, setSeconds] = useState(0);
 
@@ -91,14 +103,55 @@ export default function CallModal() {
     );
   }
 
+  // Multi-party Group Call with LiveKit SFU
+  if (activeCall.isGroup) {
+    return (
+      <div
+        onClick={handleBackdropClick}
+        className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 select-none"
+      >
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="w-full max-w-4xl bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col h-[640px] relative animate-in fade-in zoom-in-95 duration-200"
+        >
+          <GroupVideoRoom
+            conversationId={activeCall.conversationId}
+            conversationName={activeCall.conversationName}
+            token={token}
+            onEndCall={endCall}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  const conv = conversations.find((c) => c.id === activeCall.conversationId);
+  const otherMember = !activeCall.isGroup && conv
+    ? conv.members?.find((m) => m.id !== currentUser?.id) || conv.members?.[0]
+    : null;
+
   // Full Screen Call Modal
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 select-none">
-      <div className="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col h-[520px] relative animate-in fade-in zoom-in-95 duration-200">
+    <div
+      onClick={handleBackdropClick}
+      className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 select-none"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col h-[520px] relative animate-in fade-in zoom-in-95 duration-200"
+      >
         {/* Top Header Bar */}
         <div className="p-4 flex items-center justify-between z-10">
           <div>
-            <h3 className="font-bold text-sm text-white">{activeCall.conversationName}</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="font-bold text-sm text-white">{activeCall.conversationName}</h3>
+              {otherMember?.phoneNumber && (
+                <span className="text-[11px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20 flex items-center gap-1">
+                  <Phone className="w-2.5 h-2.5" />
+                  {otherMember.phoneNumber}
+                </span>
+              )}
+            </div>
             <span className="text-xs text-emerald-400 font-medium">
               Đang kết nối • {formatDuration(seconds)}
             </span>
@@ -116,12 +169,26 @@ export default function CallModal() {
         {/* Video / Avatar Canvas Area */}
         <div className="flex-1 flex items-center justify-center relative bg-slate-950">
           {activeCall.isVideoOff ? (
-            <div className="text-center space-y-4">
+            <div className="text-center space-y-3">
               <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white text-3xl font-bold shadow-2xl shadow-blue-500/20 mx-auto uppercase">
                 {activeCall.conversationName.charAt(0)}
               </div>
               <h4 className="font-bold text-lg text-white">{activeCall.conversationName}</h4>
-              <p className="text-xs text-slate-400">Cuộc gọi thoại thời gian thực bảo mật</p>
+              {otherMember?.phoneNumber ? (
+                <div className="flex items-center justify-center gap-2 text-xs text-emerald-400 font-mono">
+                  <Phone className="w-3.5 h-3.5" />
+                  <span>{otherMember.phoneNumber}</span>
+                  <a
+                    href={`tel:${otherMember.phoneNumber}`}
+                    className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300"
+                    title="Gọi qua sim di động trực tiếp"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400">Cuộc gọi thoại thời gian thực bảo mật</p>
+              )}
             </div>
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-slate-900/80">

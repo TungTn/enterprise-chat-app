@@ -6,6 +6,7 @@
   "scripts": {
     "dev:server": "pnpm --filter @enterprise-chat/server dev",
     "dev:web": "pnpm --filter @enterprise-chat/web dev",
+    "dev:desktop": "pnpm --filter @enterprise-chat/desktop start",
     "dev:mobile": "pnpm --filter @enterprise-chat/mobile start",
     "mobile:lan": "pnpm --filter @enterprise-chat/mobile start:lan",
     "mobile:android": "pnpm --filter @enterprise-chat/mobile android",

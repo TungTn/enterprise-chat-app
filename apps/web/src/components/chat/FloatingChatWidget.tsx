@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useChatStore } from '@/stores/useChatStore';
 import {
   MessageSquare,
@@ -11,6 +11,7 @@ import {
   Hash,
 } from 'lucide-react';
 import { ConversationType } from '@enterprise-chat/shared-types';
+import { formatMessageTime } from '@/lib/formatDate';
 
 export default function FloatingChatWidget() {
   const {
@@ -25,6 +26,22 @@ export default function FloatingChatWidget() {
 
   const [inputVal, setInputVal] = useState('');
   const [showConvDropdown, setShowConvDropdown] = useState(false);
+
+  // Close dropdown or widget on Escape
+  useEffect(() => {
+    if (!isQuickWidgetOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showConvDropdown) {
+          setShowConvDropdown(false);
+        } else {
+          toggleQuickWidget(false);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isQuickWidgetOpen, showConvDropdown, toggleQuickWidget]);
 
   const activeConv = conversations.find((c) => c.id === activeConversationId);
   const messages = (activeConversationId && messagesMap[activeConversationId]) || [];
@@ -65,27 +82,33 @@ export default function FloatingChatWidget() {
               </button>
 
               {showConvDropdown && (
-                <div className="absolute left-0 top-full mt-2 w-64 bg-slate-950 border border-slate-800 rounded-xl shadow-2xl py-1 z-30 max-h-56 overflow-y-auto">
-                  {conversations.map((c) => (
-                    <button
-                      key={c.id}
-                      onClick={() => {
-                        setActiveConversationId(c.id);
-                        setShowConvDropdown(false);
-                      }}
-                      className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between hover:bg-slate-800 transition-colors ${
-                        c.id === activeConversationId ? 'text-blue-400 font-semibold bg-slate-800/50' : 'text-slate-300'
-                      }`}
-                    >
-                      <span className="truncate">{c.name}</span>
-                      {c.unreadCount > 0 && (
-                        <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.2 rounded-full">
-                          {c.unreadCount}
-                        </span>
-                      )}
-                    </button>
-                  ))}
-                </div>
+                <>
+                  <div
+                    className="fixed inset-0 z-20"
+                    onClick={() => setShowConvDropdown(false)}
+                  />
+                  <div className="absolute left-0 top-full mt-2 w-64 bg-slate-950 border border-slate-800 rounded-xl shadow-2xl py-1 z-30 max-h-56 overflow-y-auto">
+                    {conversations.map((c) => (
+                      <button
+                        key={c.id}
+                        onClick={() => {
+                          setActiveConversationId(c.id);
+                          setShowConvDropdown(false);
+                        }}
+                        className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between hover:bg-slate-800 transition-colors ${
+                          c.id === activeConversationId ? 'text-blue-400 font-semibold bg-slate-800/50' : 'text-slate-300'
+                        }`}
+                      >
+                        <span className="truncate">{c.name}</span>
+                        {c.unreadCount > 0 && c.id !== activeConversationId && (
+                          <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.2 rounded-full">
+                            {c.unreadCount}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </>
               )}
             </div>
 
@@ -110,7 +133,7 @@ export default function FloatingChatWidget() {
                 <div key={m.id} className="space-y-0.5">
                   <div className="flex items-baseline gap-1.5">
                     <span className="font-semibold text-white text-[11px]">{m.senderName}</span>
-                    <span className="text-[9px] text-slate-500">{m.createdAt}</span>
+                    <span className="text-[9px] text-slate-500">{formatMessageTime(m.createdAt)}</span>
                   </div>
                   <div className="bg-slate-950/80 border border-slate-800/60 rounded-lg p-2 text-slate-200">
                     {m.content}

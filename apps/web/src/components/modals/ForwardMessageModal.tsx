@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useChatStore } from '@/stores/useChatStore';
 import { X, Forward, Check, Hash } from 'lucide-react';
 import { ConversationType } from '@enterprise-chat/shared-types';
+import { useModalDismiss } from '@/hooks/useModalDismiss';
 
 export default function ForwardMessageModal() {
   const {
@@ -14,6 +15,14 @@ export default function ForwardMessageModal() {
     conversations,
     sendMessage,
   } = useChatStore();
+
+  const { handleBackdropClick } = useModalDismiss({
+    isOpen: isForwardOpen,
+    onClose: () => {
+      toggleForward(false);
+      setMessageToForward(null);
+    },
+  });
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
@@ -43,8 +52,14 @@ export default function ForwardMessageModal() {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 select-none">
-      <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
+    <div
+      onClick={handleBackdropClick}
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 select-none"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200"
+      >
         <div className="p-4 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-blue-600/20 text-blue-400 flex items-center justify-center">
