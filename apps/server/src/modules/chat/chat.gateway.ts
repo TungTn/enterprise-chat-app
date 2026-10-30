@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import {
   WebSocketGateway,
   WebSocketServer,
@@ -13,7 +14,7 @@ import { ConfigService } from '@nestjs/config';
 import { ChatService } from './chat.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
-import { SOCKET_EVENTS, SendMessageDto, PresenceStatus, MessageAckDto } from '@enterprise-chat/shared-types';
+import { SOCKET_EVENTS, SendMessageDto, PresenceStatus, MessageAckDto, MessageType } from '@enterprise-chat/shared-types';
 
 interface AuthenticatedSocket extends Socket {
   user?: {
@@ -21,6 +22,7 @@ interface AuthenticatedSocket extends Socket {
     email: string;
     fullName: string;
     role: string;
+    avatarUrl?: string;
   };
 }
 
@@ -34,6 +36,8 @@ interface AuthenticatedSocket extends Socket {
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
+
+  private readonly logger = new Logger(ChatGateway.name);
 
   // Track active socket connections per user: userId -> Set of socketIds
   private activeUsers = new Map<string, Set<string>>();
@@ -392,6 +396,170 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       // ONLY broadcast to sockets belonging to the EXACT same workstation/IP!
       client.to(`client_ip:${clientIp}`).emit('SYNC_SESSION_CHANGED', data);
     }
+    return { success: true };
+  }
+
+  // --- WebRTC Signalling Handlers ---
+
+  @SubscribeMessage('call:initiate')
+  handleCallInitiate(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody()
+    data: {
+      conversationId: string;
+      receiverId: string;
+      callType?: 'audio' | 'video';
+      callerName?: string;
+      callerAvatar?: string;
+    },
+  ) {
+    if (!client.user || !data.receiverId) return;
+    const callId = `call-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    this.logger.log(`📞 Call initiated from ${client.user.id} to ${data.receiverId} in conv ${data.conversationId}`);
+
+    this.server.to(`user:${data.receiverId}`).emit('call:incoming', {
+      callId,
+      conversationId: data.conversationId,
+      callerId: client.user.id,
+      callerName: data.callerName || client.user.fullName || 'Đồng nghiệp',
+      callerAvatar: data.callerAvatar || client.user.avatarUrl,
+      callType: data.callType || 'audio',
+    });
+
+    return { callId, status: 'calling' };
+  }
+
+  @SubscribeMessage('call:accept')
+  handleCallAccept(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody()
+    data: {
+      callId: string;
+      callerId: string;
+      conversationId: string;
+    },
+  ) {
+    if (!client.user || !data.callerId) return;
+    this.logger.log(`✅ Call accepted by ${client.user.id} for caller ${data.callerId}`);
+
+    this.server.to(`user:${data.callerId}`).emit('call:accepted', {
+      callId: data.callId,
+      receiverId: client.user.id,
+      conversationId: data.conversationId,
+    });
+
+    return { success: true };
+  }
+
+  @SubscribeMessage('call:signal')
+  handleCallSignal(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody()
+    data: {
+      targetUserId: string;
+      callId: string;
+      signal: any;
+    },
+  ) {
+    if (!client.user || !data.targetUserId) return;
+
+    this.server.to(`user:${data.targetUserId}`).emit('call:signal', {
+      senderId: client.user.id,
+      callId: data.callId,
+      signal: data.signal,
+    });
+
+    return { success: true };
+  }
+
+  @SubscribeMessage('call:reject')
+  async handleCallReject(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody()
+    data: {
+      callerId: string;
+      callId: string;
+      conversationId?: string;
+      reason?: string;
+    },
+  ) {
+    if (!client.user || !data.callerId) return;
+    this.logger.log(`❌ Call rejected by ${client.user.id} for caller ${data.callerId}`);
+
+    this.server.to(`user:${data.callerId}`).emit('call:rejected', {
+      callId: data.callId,
+      receiverId: client.user.id,
+      conversationId: data.conversationId,
+      reason: data.reason || 'declined',
+    });
+
+    // Save Call Log Message to the conversation so both parties see it in chat history
+    if (data.conversationId) {
+      const callLogContent = `[CALL_LOG]:${JSON.stringify({
+        type: 'audio',
+        status: 'declined',
+        duration: 0,
+      })}`;
+      try {
+        const message = await this.chatService.sendMessage(client.user.id, {
+          conversationId: data.conversationId,
+          content: callLogContent,
+          type: MessageType.SYSTEM,
+        });
+        await this.broadcastNewMessage(message);
+      } catch (err: any) {
+        this.logger.warn(`Failed to record call reject log: ${err?.message || err}`);
+      }
+    }
+
+    return { success: true };
+  }
+
+  @SubscribeMessage('call:end')
+  async handleCallEnd(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody()
+    data: {
+      targetUserId: string;
+      callId: string;
+      conversationId?: string;
+      durationSeconds?: number;
+      callStatus?: 'missed' | 'completed';
+      callType?: 'audio' | 'video';
+    },
+  ) {
+    if (!client.user || !data.targetUserId) return;
+    this.logger.log(`⏹️ Call ended by ${client.user.id} for target ${data.targetUserId}`);
+
+    const status = data.callStatus || ((data.durationSeconds || 0) > 0 ? 'completed' : 'missed');
+
+    this.server.to(`user:${data.targetUserId}`).emit('call:ended', {
+      callId: data.callId,
+      senderId: client.user.id,
+      conversationId: data.conversationId,
+      callStatus: status,
+      durationSeconds: data.durationSeconds || 0,
+    });
+
+    // Save Call Log Message to conversation
+    if (data.conversationId) {
+      const callLogContent = `[CALL_LOG]:${JSON.stringify({
+        type: data.callType || 'audio',
+        status,
+        duration: data.durationSeconds || 0,
+      })}`;
+      try {
+        const message = await this.chatService.sendMessage(client.user.id, {
+          conversationId: data.conversationId,
+          content: callLogContent,
+          type: MessageType.SYSTEM,
+        });
+        await this.broadcastNewMessage(message);
+      } catch (err: any) {
+        this.logger.warn(`Failed to record call end log: ${err?.message || err}`);
+      }
+    }
+
     return { success: true };
   }
 }

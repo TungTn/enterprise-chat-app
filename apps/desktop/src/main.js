@@ -40,6 +40,27 @@ function saveServerUrl(url) {
   }
 }
 
+// Automatically configure Chromium engine inside Electron to treat HTTP LAN IP as Secure Context
+// This enables navigator.mediaDevices (Microphone & Camera) out-of-the-box without manual flags!
+const initialServerUrl = getServerUrl();
+const secureOrigins = Array.from(
+  new Set([
+    initialServerUrl,
+    'http://10.2.8.231:3000',
+    'http://10.2.8.231:9000',
+    'http://localhost:3000',
+    'http://localhost:9000',
+  ])
+)
+  .filter(Boolean)
+  .join(',');
+
+app.commandLine.appendSwitch('unsafely-treat-insecure-origin-as-secure', secureOrigins);
+app.commandLine.appendSwitch('ignore-certificate-errors');
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
+app.commandLine.appendSwitch('disable-features', 'WebRtcHideLocalIpsWithMdns');
+app.commandLine.appendSwitch('force-webrtc-ip-handling-policy', 'default');
+
 function createWindow() {
   const iconPath = path.join(__dirname, 'icon.png');
 
@@ -70,6 +91,12 @@ function createWindow() {
       mainWindow.webContents.reloadIgnoringCache();
       event.preventDefault();
     }
+    if (input.control && input.shift && input.key.toLowerCase() === 'l') {
+      session.defaultSession.clearStorageData().then(() => {
+        mainWindow.loadURL(getServerUrl());
+      });
+      event.preventDefault();
+    }
   });
 
   // Automatically grant camera and microphone permissions for WebRTC calls
@@ -77,6 +104,17 @@ function createWindow() {
     const allowed = ['media', 'notifications', 'camera', 'microphone', 'display-capture'];
     callback(allowed.includes(permission));
   });
+
+  if (session.defaultSession.setPermissionCheckHandler) {
+    session.defaultSession.setPermissionCheckHandler((webContents, permission) => {
+      const allowed = ['media', 'notifications', 'camera', 'microphone', 'display-capture'];
+      return allowed.includes(permission);
+    });
+  }
+
+  if (session.defaultSession.setDevicePermissionHandler) {
+    session.defaultSession.setDevicePermissionHandler(() => true);
+  }
 
   const appUrl = getServerUrl();
   console.log('Loading Enterprise Chat from:', appUrl);
@@ -117,6 +155,18 @@ function createTray() {
           if (mainWindow) {
             mainWindow.show();
             mainWindow.focus();
+          }
+        },
+      },
+      {
+        label: '🔄 Đổi tài khoản (Đăng xuất)...',
+        click: () => {
+          if (mainWindow) {
+            session.defaultSession.clearStorageData().then(() => {
+              mainWindow.loadURL(getServerUrl());
+              mainWindow.show();
+              mainWindow.focus();
+            });
           }
         },
       },

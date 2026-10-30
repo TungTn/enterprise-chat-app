@@ -162,12 +162,27 @@ export interface ChatSlice {
   processOutboxQueue: () => Promise<void>;
 }
 
+export interface IncomingCallState {
+  callId: string;
+  conversationId: string;
+  callerId: string;
+  callerName: string;
+  callerAvatar?: string;
+  callType: CallType;
+}
+
 export interface CallSlice {
   activeCall: ActiveCallState | null;
+  incomingCall: IncomingCallState | null;
   isCallModalOpen: boolean;
+  callNotice: string | null;
 
   startCall: (type: CallType) => void;
-  endCall: () => void;
+  endCall: (durationSeconds?: number) => void;
+  acceptIncomingCall: () => void;
+  rejectIncomingCall: () => void;
+  setIncomingCall: (call: IncomingCallState | null) => void;
+  setCallNotice: (notice: string | null) => void;
   toggleMute: () => void;
   toggleVideo: () => void;
   toggleScreenShare: () => void;
