@@ -98,6 +98,8 @@ export interface ChatSlice {
   editingMessage: ChatMessage | null;
   messageToForward: ChatMessage | null;
   searchQuery: string;
+  searchResults: (ChatMessage & { conversationName?: string; conversationType?: string })[];
+  isSearching: boolean;
   isGeneratingSummary: boolean;
   currentAiSummary: ChatAiSummary | null;
   readReceiptsMessage: ChatMessage | null;
@@ -160,6 +162,8 @@ export interface ChatSlice {
   createDirectApi: (targetUserId: string) => Promise<string | null>;
   fetchOlderMessages: (conversationId: string) => Promise<boolean>;
   processOutboxQueue: () => Promise<void>;
+  searchMessages: (query: string, conversationId?: string) => Promise<void>;
+  clearSearchResults: () => void;
 }
 
 export interface IncomingCallState {

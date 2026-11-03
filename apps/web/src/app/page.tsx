@@ -150,6 +150,26 @@ export default function ChatApp() {
       document.documentElement.setAttribute('data-theme', settings.appearance?.themeId || 'dots');
       document.documentElement.setAttribute('lang', settings.account?.language || 'vi');
     }
+
+    // Register Service Worker for Background Notifications
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker
+        .register('/sw.js')
+        .then((reg) => {
+          console.log('[SW] Registered successfully with scope:', reg.scope);
+        })
+        .catch((err) => {
+          console.warn('[SW] Registration notice:', err?.message || err);
+        });
+
+      const handleSwMessage = (event: MessageEvent) => {
+        if (event.data?.type === 'NAVIGATE_CONVERSATION' && event.data.conversationId) {
+          useChatStore.getState().setActiveConversationId(event.data.conversationId);
+        }
+      };
+      navigator.serviceWorker.addEventListener('message', handleSwMessage);
+      return () => navigator.serviceWorker.removeEventListener('message', handleSwMessage);
+    }
   }, [settings.appearance?.themeId, settings.account?.language]);
 
   // Auto-refresh conversations when window gains focus or tab becomes visible

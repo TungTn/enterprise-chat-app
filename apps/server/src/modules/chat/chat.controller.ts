@@ -23,6 +23,17 @@ export class ChatController {
     private readonly chatGateway: ChatGateway,
   ) {}
 
+  @Get('messages/search')
+  async searchMessages(
+    @CurrentUser() user: { id: string },
+    @Query('q') query?: string,
+    @Query('conversationId') conversationId?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const limitNum = limit ? parseInt(limit, 10) : 30;
+    return this.chatService.searchMessages(user.id, query || '', conversationId, limitNum);
+  }
+
   @Get('conversations/:id/messages')
   async getMessages(
     @Param('id') conversationId: string,

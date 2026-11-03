@@ -1,4 +1,4 @@
-﻿import { StateCreator } from 'zustand';
+import { StateCreator } from 'zustand';
 import {
   ChatMessage,
   ConversationSummary,
@@ -112,6 +112,8 @@ export const createChatSlice: StateCreator<ChatState, [], [], ChatSlice> = (set,
   editingMessage: null,
   messageToForward: null,
   searchQuery: '',
+  searchResults: [],
+  isSearching: false,
   isGeneratingSummary: false,
   currentAiSummary: null,
   readReceiptsMessage: null,
@@ -844,5 +846,35 @@ export const createChatSlice: StateCreator<ChatState, [], [], ChatSlice> = (set,
       }
     }
     return null;
+  },
+
+  searchMessages: async (query: string, conversationId?: string) => {
+    if (!query || !query.trim()) {
+      set({ searchResults: [], isSearching: false });
+      return;
+    }
+    const token = get().token;
+    if (!token) return;
+
+    set({ isSearching: true });
+    try {
+      const params = new URLSearchParams({ q: query.trim() });
+      if (conversationId) {
+        params.append('conversationId', conversationId);
+      }
+      const results = await apiRequest<(ChatMessage & { conversationName?: string; conversationType?: string })[]>(
+        `/chat/messages/search?${params.toString()}`,
+        { method: 'GET' },
+        token
+      );
+      set({ searchResults: Array.isArray(results) ? results : [], isSearching: false });
+    } catch (err) {
+      console.warn('Search messages error:', err);
+      set({ searchResults: [], isSearching: false });
+    }
+  },
+
+  clearSearchResults: () => {
+    set({ searchResults: [], isSearching: false, searchQuery: '' });
   },
 });

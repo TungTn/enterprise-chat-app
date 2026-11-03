@@ -158,6 +158,39 @@ export function setupStoreSocketListeners(
     }
   );
 
+  socket.off(SOCKET_EVENTS.LINK_PREVIEW_UPDATED);
+  socket.on(
+    SOCKET_EVENTS.LINK_PREVIEW_UPDATED,
+    (data: { conversationId: string; messageId: string; linkPreview: any }) => {
+      if (!data || !data.conversationId || !data.messageId) return;
+      const { messagesMap } = get();
+      const list = messagesMap[data.conversationId] || [];
+      const updatedList = list.map((m) =>
+        m.id === data.messageId ? { ...m, linkPreview: data.linkPreview } : m
+      );
+      set((state) => ({
+        messagesMap: {
+          ...state.messagesMap,
+          [data.conversationId]: updatedList,
+        },
+      }));
+    }
+  );
+
+  socket.off(SOCKET_EVENTS.MESSAGE_EDITED);
+  socket.on(SOCKET_EVENTS.MESSAGE_EDITED, (updatedMsg: ChatMessage) => {
+    if (!updatedMsg || !updatedMsg.conversationId) return;
+    const { messagesMap } = get();
+    const list = messagesMap[updatedMsg.conversationId] || [];
+    const updatedList = list.map((m) => (m.id === updatedMsg.id ? updatedMsg : m));
+    set((state) => ({
+      messagesMap: {
+        ...state.messagesMap,
+        [updatedMsg.conversationId]: updatedList,
+      },
+    }));
+  });
+
   socket.on(
     SOCKET_EVENTS.READ_RECEIPT,
     (data: { conversationId: string; userId: string; messageId?: string }) => {

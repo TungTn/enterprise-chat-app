@@ -1,12 +1,16 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { SendMessageDto, MessageType, IceServerConfig } from '@enterprise-chat/shared-types';
+import { SendMessageDto, MessageType, IceServerConfig, LinkPreviewMetadata } from '@enterprise-chat/shared-types';
 import { MessageDeliveryStatus } from '@prisma/client';
 import { AccessToken } from 'livekit-server-sdk';
+import { UrlMetadataService } from './url-metadata.service';
 
 @Injectable()
 export class ChatService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly urlMetadataService: UrlMetadataService,
+  ) {}
 
   async sendMessage(userId: string, dto: SendMessageDto) {
     // Check if user is a member of the conversation
@@ -47,7 +51,8 @@ export class ChatService {
       });
 
       if (existing) {
-        return this.formatMessage(existing);
+        const formatted = this.formatMessage(existing);
+        return await this.attachLinkPreview(formatted);
       }
     }
 
@@ -109,7 +114,8 @@ export class ChatService {
       return { message: newMsg, attachments: linkedAttachments };
     });
 
-    return this.formatMessage({ ...message, attachments });
+    const formatted = this.formatMessage({ ...message, attachments });
+    return await this.attachLinkPreview(formatted);
   }
 
   async getMessages(conversationId: string, userId: string, cursor?: string, limit = 50) {
@@ -149,8 +155,15 @@ export class ChatService {
     const items = hasNextPage ? messages.slice(0, take) : messages;
     const nextCursor = hasNextPage ? items[items.length - 1].id : null;
 
+    const formattedList = await Promise.all(
+      items.map(async (m) => {
+        const fmt = this.formatMessage(m);
+        return await this.attachLinkPreview(fmt);
+      })
+    );
+
     return {
-      items: items.map(this.formatMessage).reverse(), // Return chronological order
+      items: formattedList.reverse(), // Return chronological order
       nextCursor,
     };
   }
@@ -233,7 +246,8 @@ export class ChatService {
       },
     });
 
-    return this.formatMessage(updated);
+    const formatted = this.formatMessage(updated);
+    return await this.attachLinkPreview(formatted);
   }
 
   async deleteMessage(messageId: string, userId: string, userRole?: string) {
@@ -321,7 +335,12 @@ export class ChatService {
       },
     });
 
-    return messages.map((m) => this.formatMessage(m));
+    return await Promise.all(
+      messages.map(async (m) => {
+        const fmt = this.formatMessage(m);
+        return await this.attachLinkPreview(fmt);
+      })
+    );
   }
 
   async updateDeliveryStatus(messageId: string, userId: string, status: any) {
@@ -553,8 +572,97 @@ export class ChatService {
       isDeleted: msg.isDeleted,
       attachments,
       reactions: reactionMap,
+      linkPreview: msg.linkPreview || null,
       createdAt: msg.createdAt instanceof Date ? msg.createdAt.toISOString() : (msg.createdAt || new Date().toISOString()),
       updatedAt: msg.updatedAt instanceof Date ? msg.updatedAt.toISOString() : msg.updatedAt,
     };
   }
+
+  public async attachLinkPreview(formattedMsg: any): Promise<any> {
+    if (!formattedMsg || !formattedMsg.content || formattedMsg.isDeleted) return formattedMsg;
+    const url = this.urlMetadataService.extractFirstUrl(formattedMsg.content);
+    if (!url) return formattedMsg;
+
+    const preview = await this.urlMetadataService.getMetadata(url);
+    if (preview) {
+      formattedMsg.linkPreview = preview;
+    }
+    return formattedMsg;
+  }
+
+  async searchMessages(
+    userId: string,
+    query: string,
+    conversationId?: string,
+    limit: number = 30,
+  ) {
+    if (!query || !query.trim()) {
+      return [];
+    }
+    const cleanQuery = query.trim();
+
+    const whereCondition: any = {
+      isDeleted: false,
+      content: {
+        contains: cleanQuery,
+        mode: 'insensitive',
+      },
+    };
+
+    if (conversationId) {
+      const member = await this.prisma.conversationMember.findUnique({
+        where: {
+          conversationId_userId: {
+            conversationId,
+            userId,
+          },
+        },
+      });
+      if (!member) {
+        throw new ForbiddenException('Bạn không phải thành viên của cuộc hội thoại này');
+      }
+      whereCondition.conversationId = conversationId;
+    } else {
+      whereCondition.conversation = {
+        members: {
+          some: { userId },
+        },
+      };
+    }
+
+    const messages = await this.prisma.message.findMany({
+      where: whereCondition,
+      take: Math.min(limit, 100),
+      orderBy: { createdAt: 'desc' },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            fullName: true,
+            avatarUrl: true,
+            role: true,
+          },
+        },
+        reactions: true,
+        attachments: true,
+        conversation: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+          },
+        },
+      },
+    });
+
+    return messages.map((m) => {
+      const formatted = this.formatMessage(m);
+      return {
+        ...formatted,
+        conversationName: m.conversation?.name || null,
+        conversationType: m.conversation?.type || null,
+      };
+    });
+  }
 }
+

@@ -134,7 +134,8 @@ export const createAuthSlice: StateCreator<ChatState, [], [], AuthSlice> = (set,
       }
       return false;
     } catch (err: any) {
-      console.error('[SSO] BPM Login failed:', err);
+      console.warn('[SSO] BPM Login could not be completed:', err?.message || err);
+      set({ authError: err?.message || 'Không thể đồng bộ phiên đăng nhập từ BPM' });
       return false;
     }
   },

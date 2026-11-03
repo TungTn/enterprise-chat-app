@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 
 import { formatMessageTime, formatFullDateTime } from '@/lib/formatDate';
+import LinkPreviewCard from './LinkPreviewCard';
 
 interface Props {
   message: ChatMessage;
@@ -186,8 +187,9 @@ export default function MessageItem({ message }: Props) {
   const imageFiles = (message.attachments || []).filter(isImageAttachment);
   const docFiles = (message.attachments || []).filter((att) => !isImageAttachment(att));
 
-  const renderTextWithMentions = (rawText: string, isSelfMsg: boolean) => {
-    const regex = /(@all|@here|@[a-zA-Z0-9_\u00C0-\u1EF9]+(?:\s+[a-zA-Z0-9_\u00C0-\u1EF9]+)*)/g;
+  const renderTextWithMentionsAndLinks = (rawText: string, isSelfMsg: boolean) => {
+    // Regex matching @mentions or URLs (http/https)
+    const regex = /(@all|@here|@[a-zA-Z0-9_\u00C0-\u1EF9]+(?:\s+[a-zA-Z0-9_\u00C0-\u1EF9]+)*|https?:\/\/[^\s<>"'{}|\\^`\[\]]+)/g;
     const parts = rawText.split(regex);
     return parts.map((part, i) => {
       if (part === '@all' || part === '@here') {
@@ -213,6 +215,24 @@ export default function MessageItem({ message }: Props) {
           >
             {part}
           </span>
+        );
+      }
+      if (part.startsWith('http://') || part.startsWith('https://')) {
+        return (
+          <a
+            key={i}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className={`underline underline-offset-2 break-all transition-colors ${
+              isSelfMsg
+                ? 'text-blue-100 hover:text-white hover:underline'
+                : 'text-blue-400 hover:text-blue-300 hover:underline'
+            }`}
+          >
+            {part}
+          </a>
         );
       }
       return part;
@@ -456,7 +476,7 @@ export default function MessageItem({ message }: Props) {
                 }
                 return (
                   <p key={idx} className="whitespace-pre-wrap">
-                    {renderTextWithMentions(part.text, isSelf)}
+                    {renderTextWithMentionsAndLinks(part.text, isSelf)}
                   </p>
                 );
               })}
@@ -634,6 +654,11 @@ export default function MessageItem({ message }: Props) {
                 </div>
               ))}
             </div>
+          )}
+
+          {/* Link Preview Card (Grab, Shopee, Web URLs) */}
+          {message.linkPreview && (
+            <LinkPreviewCard preview={message.linkPreview} isSelf={isSelf} />
           )}
 
           {/* Bubble Footer: Timestamp & Delivery Status */}

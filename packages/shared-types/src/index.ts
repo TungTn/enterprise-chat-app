@@ -118,6 +118,16 @@ export interface VotePollDto {
   optionId: string;
 }
 
+// Link Preview Metadata
+export interface LinkPreviewMetadata {
+  url: string;
+  title?: string;
+  description?: string;
+  imageUrl?: string;
+  siteName?: string;
+  favIcon?: string;
+}
+
 // Reply Preview
 export interface ChatReplyPreview {
   messageId: string;
@@ -147,6 +157,7 @@ export interface ChatMessage {
   attachments?: AttachmentMetadata[];
   voice?: ChatVoiceData;
   poll?: ChatPoll;
+  linkPreview?: LinkPreviewMetadata | null;
   reactions?: Record<string, string[]>; // emoji -> array of userIds
   clientMessageId?: string;
   sequenceNumber?: number;
@@ -273,6 +284,7 @@ export const SOCKET_EVENTS = {
   MESSAGE_REACTION_UPDATED: 'message:reaction_updated',
   PIN_MESSAGE: 'message:pin',
   MESSAGE_PINNED: 'message:pinned',
+  LINK_PREVIEW_UPDATED: 'message:link_preview_updated',
 
   // Polls
   POLL_VOTE: 'poll:vote',

@@ -43,25 +43,46 @@ export function disconnectSocket() {
   }
 }
 
-// Request and dispatch Native Desktop Notifications
-export function showDesktopNotification(title: string, options?: NotificationOptions) {
+// Request and dispatch Native Desktop Notifications (supports Service Worker & Background)
+export function showDesktopNotification(title: string, options?: NotificationOptions & { data?: any }) {
   if (typeof window === 'undefined') return;
+
+  const dispatchNotification = (perm: NotificationPermission) => {
+    if (perm !== 'granted') return;
+
+    const notifOptions = {
+      icon: '/favicon.ico',
+      badge: '/favicon.ico',
+      ...options,
+    };
+
+    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.ready
+        .then((reg) => {
+          reg.showNotification(title, notifOptions);
+        })
+        .catch(() => {
+          try {
+            new Notification(title, notifOptions);
+          } catch {
+            // Ignore
+          }
+        });
+    } else if ('Notification' in window) {
+      try {
+        new Notification(title, notifOptions);
+      } catch {
+        // Ignore
+      }
+    }
+  };
 
   if ('Notification' in window) {
     if (Notification.permission === 'granted') {
-      new Notification(title, {
-        icon: '/favicon.ico',
-        badge: '/favicon.ico',
-        ...options,
-      });
+      dispatchNotification('granted');
     } else if (Notification.permission !== 'denied') {
       Notification.requestPermission().then((permission) => {
-        if (permission === 'granted') {
-          new Notification(title, {
-            icon: '/favicon.ico',
-            ...options,
-          });
-        }
+        dispatchNotification(permission);
       });
     }
   }
